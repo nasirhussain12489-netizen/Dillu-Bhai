@@ -1,0 +1,6 @@
+{
+  "name": "Vortex Multimodal Studio",
+  "description": "Production creative and intelligence command studio powered by Gemini image synthesis, Veo 3 cinema generation, multi-model chat, Google Search grounding, and Google Maps spatial discovery.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

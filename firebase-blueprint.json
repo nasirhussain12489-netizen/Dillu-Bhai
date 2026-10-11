@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "PortalUser": {
+      "title": "PortalUser",
+      "description": "A user who has signed in, registered, or applied for admission on the Madarsa Portal.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Unique identifier of the user",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Official Student ID assigned upon admission approval",
+          "maxLength": 64
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the user",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user",
+          "minLength": 3,
+          "maxLength": 150
+        },
+        "role": {
+          "type": "string",
+          "description": "Assigned portal role",
+          "enum": ["Super Admin", "Admin", "Teacher", "Student", "Parent"]
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update",
+          "maxLength": 64
+        }
+      },
+      "required": ["uid", "name", "email", "role", "updatedAt"]
+    },
+    "PortalStateDoc": {
+      "title": "PortalStateDoc",
+      "description": "Synchronized Madarsa Portal database state storing admissions, users, admins, students, teachers, results, notices, and activity logs.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "UID or identifier of the updater",
+          "maxLength": 128
+        },
+        "payloadJson": {
+          "type": "string",
+          "description": "Serialized portal database state",
+          "maxLength": 900000
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["ownerId", "payloadJson", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/portal_users/{userId}": {
+      "schema": { "$ref": "#/entities/PortalUser" },
+      "description": "Stores signed-in users, student IDs, and their assigned roles in the Madarsa Portal."
+    },
+    "/portal_state/{docId}": {
+      "schema": { "$ref": "#/entities/PortalStateDoc" },
+      "description": "Stores synchronized Madarsa Portal records across sessions."
+    }
+  }
+}
