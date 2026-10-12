@@ -18,6 +18,7 @@ import {
   PortalState,
 } from '../types/portal';
 import { MadarsaLogo, removeLogoBackground } from './MadarsaLogo';
+import { uploadImageToImgBB } from '../utils/imgbb';
 
 interface MadarsaSettingsPanelProps {
   state: PortalState;
@@ -33,6 +34,7 @@ export const MadarsaSettingsPanel: React.FC<MadarsaSettingsPanelProps> = ({
     ...(state.madarsaSettings || {}),
   }));
   const [savedNotice, setSavedNotice] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   // New stat box state
   const [newStatLabel, setNewStatLabel] = useState('');
@@ -179,7 +181,9 @@ export const MadarsaSettingsPanel: React.FC<MadarsaSettingsPanelProps> = ({
             </p>
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
               <label className="px-3.5 py-1.5 rounded-lg bg-[#144734] text-white text-xs font-bold cursor-pointer hover:bg-[#0f3627] transition-colors">
-                Upload Custom Logo (Auto Remove BG)
+                {isUploadingLogo
+                  ? 'Uploading Logo to ImgBB...'
+                  : 'Upload Custom Logo (Auto Remove BG + Save on ImgBB)'}
                 <input
                   type="file"
                   accept="image/*"
@@ -187,11 +191,18 @@ export const MadarsaSettingsPanel: React.FC<MadarsaSettingsPanelProps> = ({
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
+                    setIsUploadingLogo(true);
                     try {
                       const transparentDataUrl = await removeLogoBackground(file);
-                      setForm((prev) => ({ ...prev, logoUrl: transparentDataUrl }));
+                      const uploaded = await uploadImageToImgBB(
+                        transparentDataUrl,
+                        'madarsa_official_logo'
+                      );
+                      setForm((prev) => ({ ...prev, logoUrl: uploaded.url }));
                     } catch {
                       // ignore
+                    } finally {
+                      setIsUploadingLogo(false);
                     }
                   }}
                 />
@@ -206,6 +217,11 @@ export const MadarsaSettingsPanel: React.FC<MadarsaSettingsPanelProps> = ({
                 </button>
               )}
             </div>
+            {form.logoUrl && form.logoUrl.startsWith('http') && (
+              <p className="text-[11px] text-emerald-700 font-semibold truncate">
+                ✓ Saved on ImgBB: {form.logoUrl}
+              </p>
+            )}
           </div>
         </div>
 

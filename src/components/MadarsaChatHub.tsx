@@ -27,6 +27,7 @@ import {
   UserAccount,
 } from '../types/portal';
 import { MadarsaLogo } from './MadarsaLogo';
+import { uploadImageToImgBB } from '../utils/imgbb';
 
 interface MadarsaChatHubProps {
   state: PortalState;
@@ -79,7 +80,9 @@ export const MadarsaChatHub: React.FC<MadarsaChatHubProps> = ({
   const [uploadedSourceImage, setUploadedSourceImage] = useState<{
     base64: string;
     mimeType: string;
+    imgbbUrl?: string;
   } | null>(null);
+  const [isUploadingChatImage, setIsUploadingChatImage] = useState<boolean>(false);
 
   // Create Group / Class Group Modal State
   const [showCreateGroupModal, setShowCreateGroupModal] = useState<boolean>(false);
@@ -259,7 +262,7 @@ export const MadarsaChatHub: React.FC<MadarsaChatHubProps> = ({
     });
 
     try {
-      // MODE 1: IMAGE CREATION & EDITING (gemini-nano-banana-2.1 / fallback)
+      // MODE 1: IMAGE CREATION & EDITING (gemini-nano-banana-2.1 / fallback) + Auto-Save to ImgBB
       if (effectiveMode === 'image') {
         const imgRes = await fetch('/api/image', {
           method: 'POST',
@@ -276,6 +279,19 @@ export const MadarsaChatHub: React.FC<MadarsaChatHubProps> = ({
         setUploadedSourceImage(null);
         if (aiPowerMode === 'image') setAiPowerMode('chat');
 
+        let finalImageUrl = imgData?.imageUrl;
+        if (finalImageUrl) {
+          try {
+            const uploadedAiImg = await uploadImageToImgBB(
+              finalImageUrl,
+              `ai_image_${Date.now()}`
+            );
+            finalImageUrl = uploadedAiImg.url;
+          } catch {
+            // keep original url
+          }
+        }
+
         const aiMsg: ChatMessageItem = {
           id: `msg-ai-img-${Date.now()}`,
           roomId: room.id,
@@ -284,8 +300,8 @@ export const MadarsaChatHub: React.FC<MadarsaChatHubProps> = ({
           senderRole: 'AI Image Creator',
           text:
             imgData?.captionText ||
-            `Alhamdulillah! Aapke prompt "${userQuestion}" ke mutabiq image taiyar kar di gayi hai:`,
-          imageUrl: imgData?.imageUrl,
+            `Alhamdulillah! Aapke prompt "${userQuestion}" ke mutabiq image taiyar kar ke ImgBB par save kar di gayi hai:`,
+          imageUrl: finalImageUrl,
           timestamp: nowTime,
           isAiResponse: true,
         };
@@ -503,7 +519,9 @@ Always reply warmly, accurately, and clearly in the same language style the user
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = messageInput.trim();
-    if (!trimmed) return;
+    if (!trimmed && !uploadedSourceImage) return;
+
+    const attachedImageUrl = uploadedSourceImage?.imgbbUrl || uploadedSourceImage?.base64;
 
     const userMsg: ChatMessageItem = {
       id: `msg-${Date.now()}`,
@@ -511,8 +529,8 @@ Always reply warmly, accurately, and clearly in the same language style the user
       senderId: currentUser.studentId || effectiveStudentId || currentUser.id,
       senderName: currentUser.name,
       senderRole: currentUser.role,
-      text: trimmed,
-      imageUrl: uploadedSourceImage?.base64,
+      text: trimmed || '📷 Shared a photo (Saved on ImgBB)',
+      imageUrl: attachedImageUrl,
       timestamp: new Date().toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
@@ -538,25 +556,29 @@ Always reply warmly, accurately, and clearly in the same language style the user
       trimmed.toLowerCase().startsWith('@ai') ||
       trimmed.toLowerCase().includes('ai ustaz');
 
-    if (shouldInvokeAi) {
+    if (shouldInvokeAi && trimmed) {
       await triggerAiReply(activeRoom, trimmed, updatedHistory);
+    } else {
+      setUploadedSourceImage(null);
     }
   };
 
-  const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setUploadedSourceImage({
-          base64: reader.result,
-          mimeType: file.type || 'image/jpeg',
-        });
-        setAiPowerMode('image');
-      }
-    };
-    reader.readAsDataURL(file);
+    setIsUploadingChatImage(true);
+    try {
+      const uploaded = await uploadImageToImgBB(file, `chat_${currentUser.name}_${Date.now()}`);
+      setUploadedSourceImage({
+        base64: uploaded.base64DataUrl,
+        mimeType: uploaded.mimeType,
+        imgbbUrl: uploaded.url,
+      });
+    } catch {
+      // ignore
+    } finally {
+      setIsUploadingChatImage(false);
+    }
   };
 
   const handleCreateNewGroup = (e: React.FormEvent) => {
@@ -1200,26 +1222,40 @@ Always reply warmly, accurately, and clearly in the same language style the user
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Optional Uploaded Image Preview for Image Editing */}
-          {uploadedSourceImage && (
-            <div className="px-4 py-2 bg-amber-50 border-t border-amber-200 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <img
-                  src={uploadedSourceImage.base64}
-                  alt="Upload preview"
-                  className="w-9 h-9 rounded-lg object-cover border border-amber-400"
-                />
-                <span className="font-bold text-amber-900">
-                  Photo attached for AI Image Editing — describe what to change or add!
-                </span>
+          {/* Optional Uploaded Image Preview for Chat / Image Editing (Saved on ImgBB) */}
+          {(uploadedSourceImage || isUploadingChatImage) && (
+            <div className="px-4 py-2 bg-emerald-50 border-t border-emerald-200 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                {uploadedSourceImage && (
+                  <img
+                    src={uploadedSourceImage.imgbbUrl || uploadedSourceImage.base64}
+                    alt="Upload preview"
+                    className="w-9 h-9 rounded-lg object-cover border border-emerald-500 flex-shrink-0"
+                  />
+                )}
+                <div className="min-w-0">
+                  <span className="font-bold text-emerald-900 block truncate">
+                    {isUploadingChatImage
+                      ? 'Uploading image to ImgBB (https://imgbb.com/)...'
+                      : '✓ Photo Uploaded & Saved on ImgBB — Ready to send in chat or edit with AI!'}
+                  </span>
+                  {uploadedSourceImage?.imgbbUrl &&
+                    uploadedSourceImage.imgbbUrl.startsWith('http') && (
+                      <span className="text-[10px] text-emerald-700 font-mono truncate block">
+                        ImgBB: {uploadedSourceImage.imgbbUrl}
+                      </span>
+                    )}
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setUploadedSourceImage(null)}
-                className="text-red-600 font-bold cursor-pointer"
-              >
-                Remove
-              </button>
+              {!isUploadingChatImage && (
+                <button
+                  type="button"
+                  onClick={() => setUploadedSourceImage(null)}
+                  className="text-red-600 font-bold cursor-pointer ml-2 flex-shrink-0"
+                >
+                  Remove
+                </button>
+              )}
             </div>
           )}
 

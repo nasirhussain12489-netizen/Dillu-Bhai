@@ -18,8 +18,10 @@ import {
   Power,
   Lock,
   Unlock,
+  Upload,
 } from 'lucide-react';
 import { AdmissionApplication, PortalState, StudentItem } from '../types/portal';
+import { uploadImageToImgBB } from '../utils/imgbb';
 
 interface AdmissionsAdminPanelProps {
   state: PortalState;
@@ -48,6 +50,7 @@ export const AdmissionsAdminPanel: React.FC<AdmissionsAdminPanelProps> = ({
 
   // Edit application modal
   const [editingApp, setEditingApp] = useState<AdmissionApplication | null>(null);
+  const [isUploadingEditPhoto, setIsUploadingEditPhoto] = useState(false);
 
   const admissions = state.admissions || [];
   const totalCount = admissions.length;
@@ -757,6 +760,51 @@ export const AdmissionsAdminPanel: React.FC<AdmissionsAdminPanelProps> = ({
                   className="w-full px-3 py-2 rounded-lg border border-[#d6e0da]"
                 />
               </div>
+              <div className="sm:col-span-2">
+                <label className="font-bold block mb-1">
+                  Student Photo (Automatically Saved on ImgBB)
+                </label>
+                <div className="flex items-center gap-3">
+                  {editingApp.photoUrl && (
+                    <img
+                      src={editingApp.photoUrl}
+                      alt={editingApp.studentName}
+                      className="w-12 h-12 rounded-xl object-cover border border-emerald-500 flex-shrink-0"
+                    />
+                  )}
+                  <label className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[#144734]/40 bg-[#f9fbf9] cursor-pointer hover:bg-emerald-50/40">
+                    <Upload className="w-4 h-4 text-[#144734]" />
+                    <span className="text-[#52685e]">
+                      {isUploadingEditPhoto
+                        ? 'Uploading photo to ImgBB...'
+                        : editingApp.photoUrl
+                        ? 'Saved on ImgBB ✓ (Click to change photo)'
+                        : 'Upload Student Photo (Saves to ImgBB)'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file || !editingApp) return;
+                        setIsUploadingEditPhoto(true);
+                        try {
+                          const uploaded = await uploadImageToImgBB(
+                            file,
+                            `admission_${editingApp.studentId}`
+                          );
+                          setEditingApp((prev) =>
+                            prev ? { ...prev, photoUrl: uploaded.url } : null
+                          );
+                        } finally {
+                          setIsUploadingEditPhoto(false);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button
@@ -767,9 +815,10 @@ export const AdmissionsAdminPanel: React.FC<AdmissionsAdminPanelProps> = ({
               </button>
               <button
                 onClick={handleSaveEditedApp}
-                className="px-5 py-2 rounded-lg bg-[#144734] text-white text-xs font-extrabold cursor-pointer"
+                disabled={isUploadingEditPhoto}
+                className="px-5 py-2 rounded-lg bg-[#144734] disabled:opacity-60 text-white text-xs font-extrabold cursor-pointer"
               >
-                Save Changes
+                {isUploadingEditPhoto ? 'Uploading to ImgBB...' : 'Save Changes'}
               </button>
             </div>
           </div>

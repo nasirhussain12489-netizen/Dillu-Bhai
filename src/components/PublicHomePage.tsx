@@ -32,6 +32,7 @@ import {
   UserAccount,
 } from '../types/portal';
 import { MadarsaLogo } from './MadarsaLogo';
+import { uploadImageToImgBB } from '../utils/imgbb';
 
 interface PublicHomePageProps {
   state: PortalState;
@@ -45,6 +46,7 @@ interface PublicHomePageProps {
     phone: string;
     password: string;
     address?: string;
+    photoUrl?: string;
   }) => Promise<{ ok: boolean; error?: string; user?: UserAccount }>;
   onSubmitAdmission: (app: AdmissionApplication) => void;
   authLoading: boolean;
@@ -87,9 +89,11 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
     address: '',
     password: '',
     confirmPassword: '',
+    photoUrl: '',
   });
   const [signupError, setSignupError] = useState<string | null>(null);
   const [signupLoading, setSignupLoading] = useState(false);
+  const [isUploadingSignupPhoto, setIsUploadingSignupPhoto] = useState(false);
 
   // Admission Form State
   const [admForm, setAdmForm] = useState({
@@ -107,6 +111,7 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
     address: '',
     photoUrl: '',
   });
+  const [isUploadingAdmPhoto, setIsUploadingAdmPhoto] = useState(false);
   const [admFormError, setAdmFormError] = useState<string | null>(null);
   const [submittedApplication, setSubmittedApplication] = useState<AdmissionApplication | null>(null);
 
@@ -114,16 +119,40 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
   const [statusSearchInput, setStatusSearchInput] = useState('');
   const [foundApplications, setFoundApplications] = useState<AdmissionApplication[] | null>(null);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setAdmForm((prev) => ({ ...prev, photoUrl: reader.result as string }));
-      }
-    };
-    reader.readAsDataURL(file);
+    setIsUploadingAdmPhoto(true);
+    setAdmFormError(null);
+    try {
+      const uploaded = await uploadImageToImgBB(
+        file,
+        admForm.studentName ? `admission_${admForm.studentName}` : `admission_${Date.now()}`
+      );
+      setAdmForm((prev) => ({ ...prev, photoUrl: uploaded.url }));
+    } catch {
+      setAdmFormError('Could not upload photo to ImgBB. Please try again.');
+    } finally {
+      setIsUploadingAdmPhoto(false);
+    }
+  };
+
+  const handleSignupPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingSignupPhoto(true);
+    setSignupError(null);
+    try {
+      const uploaded = await uploadImageToImgBB(
+        file,
+        signupForm.name ? `user_${signupForm.name}` : `user_${Date.now()}`
+      );
+      setSignupForm((prev) => ({ ...prev, photoUrl: uploaded.url }));
+    } catch {
+      setSignupError('Could not upload photo to ImgBB. Please try again.');
+    } finally {
+      setIsUploadingSignupPhoto(false);
+    }
   };
 
   const handleAdmissionSubmit = (e: React.FormEvent) => {
@@ -254,6 +283,7 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
         phone: signupForm.phone,
         address: signupForm.address,
         password: signupForm.password,
+        photoUrl: signupForm.photoUrl || undefined,
       });
       if (!res.ok) {
         setSignupError(res.error || 'Could not create account.');
@@ -1187,14 +1217,48 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
                         className="w-full px-3 py-2.5 rounded-xl border border-[#d6e0da] text-sm"
                       />
                     </div>
+                    <div className="sm:col-span-2">
+                      <label className="block font-bold text-[#2d4239] mb-1">
+                        Profile Photo (Optional — Automatically Saved on ImgBB)
+                      </label>
+                      <div className="flex items-center gap-3">
+                        {signupForm.photoUrl && (
+                          <img
+                            src={signupForm.photoUrl}
+                            alt="Profile preview"
+                            className="w-11 h-11 rounded-xl object-cover border border-emerald-500 flex-shrink-0"
+                          />
+                        )}
+                        <label className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-[#144734]/40 bg-[#f9fbf9] cursor-pointer hover:bg-emerald-50/40">
+                          <Upload className="w-4 h-4 text-[#144734]" />
+                          <span className="text-[#52685e]">
+                            {isUploadingSignupPhoto
+                              ? 'Uploading photo to ImgBB...'
+                              : signupForm.photoUrl
+                              ? 'Saved on ImgBB ✓ (Click to change photo)'
+                              : 'Upload Photo (Saves to ImgBB)'}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleSignupPhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
                   </div>
 
                   <button
                     type="submit"
-                    disabled={signupLoading}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-[#d4942a] to-[#b87b19] text-white font-extrabold text-sm shadow-md hover:opacity-95 cursor-pointer"
+                    disabled={signupLoading || isUploadingSignupPhoto}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-[#d4942a] to-[#b87b19] text-white font-extrabold text-sm shadow-md hover:opacity-95 cursor-pointer disabled:opacity-60"
                   >
-                    {signupLoading ? 'Creating Account...' : 'Create Account & Login Now'}
+                    {isUploadingSignupPhoto
+                      ? 'Uploading Photo to ImgBB...'
+                      : signupLoading
+                      ? 'Creating Account...'
+                      : 'Create Account & Login Now'}
                   </button>
                 </form>
 
@@ -1509,28 +1573,49 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
 
                       <div className="sm:col-span-2">
                         <label className="block font-bold text-[#2d4239] mb-1">
-                          Student Passport Size Photo (Optional)
+                          Student Passport Size Photo (Automatically Saved on ImgBB)
                         </label>
-                        <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[#144734]/40 bg-[#f9fbf9] cursor-pointer hover:bg-emerald-50/40">
-                          <Upload className="w-4 h-4 text-[#144734]" />
-                          <span className="text-[#52685e]">
-                            {admForm.photoUrl ? 'Photo Attached ✓ (Click to change)' : 'Upload Student Photo'}
-                          </span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handlePhotoUpload}
-                            className="hidden"
-                          />
-                        </label>
+                        <div className="flex items-center gap-3">
+                          {admForm.photoUrl && (
+                            <img
+                              src={admForm.photoUrl}
+                              alt="Student preview"
+                              className="w-12 h-12 rounded-xl object-cover border-2 border-emerald-600 flex-shrink-0"
+                            />
+                          )}
+                          <label className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-[#144734]/40 bg-[#f9fbf9] cursor-pointer hover:bg-emerald-50/40">
+                            <Upload className="w-4 h-4 text-[#144734]" />
+                            <span className="text-[#52685e] font-medium">
+                              {isUploadingAdmPhoto
+                                ? 'Uploading photo to ImgBB...'
+                                : admForm.photoUrl
+                                ? 'Photo Saved on ImgBB ✓ (Click to change)'
+                                : 'Upload Student Photo (Saves to ImgBB)'}
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handlePhotoUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                        {admForm.photoUrl && admForm.photoUrl.startsWith('http') && (
+                          <p className="text-[11px] text-emerald-700 font-semibold mt-1 truncate">
+                            ✓ ImgBB URL: {admForm.photoUrl}
+                          </p>
+                        )}
                       </div>
                     </div>
 
                     <button
                       type="submit"
-                      className="w-full py-3 rounded-xl bg-[#144734] hover:bg-[#0f3627] text-white font-extrabold text-sm shadow-md cursor-pointer"
+                      disabled={isUploadingAdmPhoto}
+                      className="w-full py-3 rounded-xl bg-[#144734] hover:bg-[#0f3627] disabled:opacity-60 text-white font-extrabold text-sm shadow-md cursor-pointer"
                     >
-                      Submit Online Admission Form & Create Student Account
+                      {isUploadingAdmPhoto
+                        ? 'Uploading Photo to ImgBB...'
+                        : 'Submit Online Admission Form & Create Student Account'}
                     </button>
                   </form>
                 )}

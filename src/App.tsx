@@ -38,6 +38,8 @@ import {
   KeyRound,
   Save,
   MessageSquare,
+  Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   auth,
@@ -63,6 +65,7 @@ import { OfficialGradeCard, StudentIdCardView } from './components/GradeCardView
 import { MadarsaLogo } from './components/MadarsaLogo';
 import { AttendanceSection } from './components/AttendanceSection';
 import { MadarsaChatHub } from './components/MadarsaChatHub';
+import { uploadImageToImgBB } from './utils/imgbb';
 import {
   AdmissionApplication,
   INITIAL_PORTAL_STATE,
@@ -149,6 +152,7 @@ export default function App() {
 
   // Add Student Modal
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [isUploadingStudentPhoto, setIsUploadingStudentPhoto] = useState(false);
   const [studentForm, setStudentForm] = useState({
     studentId: '',
     admissionNo: '',
@@ -161,6 +165,7 @@ export default function App() {
     dob: '2013-01-01',
     phone: '',
     address: '',
+    photoUrl: '',
   });
 
   // Add Teacher Modal
@@ -202,12 +207,14 @@ export default function App() {
 
   // Add Homework Modal
   const [showAddHomeworkModal, setShowAddHomeworkModal] = useState(false);
+  const [isUploadingHomeworkImg, setIsUploadingHomeworkImg] = useState(false);
   const [homeworkForm, setHomeworkForm] = useState({
     title: '',
     className: 'Class 4',
     subject: 'Tajweed & Quran Majeed',
     dueDate: '2026-10-20',
     description: '',
+    attachmentUrl: '',
   });
 
   // Add Online Class Modal
@@ -223,6 +230,8 @@ export default function App() {
   // Add Feed Post & Search
   const [feedText, setFeedText] = useState('');
   const [feedTitle, setFeedTitle] = useState('');
+  const [feedImageUrl, setFeedImageUrl] = useState('');
+  const [isUploadingFeedImg, setIsUploadingFeedImg] = useState(false);
   const [feedSearchQuery, setFeedSearchQuery] = useState('');
 
   // Profile Form State
@@ -231,7 +240,9 @@ export default function App() {
     phone: '',
     address: '',
     password: '',
+    photoUrl: '',
   });
+  const [isUploadingProfilePhoto, setIsUploadingProfilePhoto] = useState(false);
   const [profileSavedMsg, setProfileSavedMsg] = useState(false);
 
   const isSuperAdmin = currentUser?.role === 'Super Admin';
@@ -246,6 +257,7 @@ export default function App() {
         phone: currentUser.phone || '',
         address: currentUser.address || '',
         password: currentUser.password || '',
+        photoUrl: currentUser.photoUrl || '',
       });
     }
   }, [currentUser]);
@@ -569,6 +581,7 @@ export default function App() {
     phone: string;
     password: string;
     address?: string;
+    photoUrl?: string;
   }): Promise<{ ok: boolean; error?: string; user?: UserAccount }> => {
     const cleanEmail = payload.email.trim().toLowerCase();
     const cleanName = payload.name.trim();
@@ -616,6 +629,7 @@ export default function App() {
       address: payload.address?.trim() || existingAdm?.address || '',
       username: generatedStudentId,
       password: cleanPassword,
+      photoUrl: payload.photoUrl || existingAdm?.photoUrl,
       role: assignedRole,
       joinedDate: new Date().toLocaleDateString('en-GB', {
         day: '2-digit',
@@ -1510,16 +1524,74 @@ export default function App() {
                       className="w-full px-3 py-2 rounded-lg border border-[#d6e0da]"
                     />
                   </div>
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-[#2d4239] mb-1">
+                      Profile & ID Card Photo (Automatically Saved on ImgBB)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      {(profileForm.photoUrl ||
+                        currentUser.photoUrl ||
+                        myStudentRecord?.photoUrl ||
+                        myAdmissionApp?.photoUrl) && (
+                        <img
+                          src={
+                            profileForm.photoUrl ||
+                            currentUser.photoUrl ||
+                            myStudentRecord?.photoUrl ||
+                            myAdmissionApp?.photoUrl
+                          }
+                          alt={currentUser.name}
+                          className="w-12 h-12 rounded-xl object-cover border-2 border-emerald-600 flex-shrink-0"
+                        />
+                      )}
+                      <label className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-[#144734]/40 bg-[#f9fbf9] cursor-pointer hover:bg-emerald-50/40">
+                        <Upload className="w-4 h-4 text-[#144734]" />
+                        <span className="text-[#52685e] font-semibold">
+                          {isUploadingProfilePhoto
+                            ? 'Uploading photo to ImgBB (https://imgbb.com/)...'
+                            : profileForm.photoUrl
+                            ? 'Photo Saved on ImgBB ✓ (Click to change photo)'
+                            : 'Upload Profile / ID Card Photo (Saves to ImgBB)'}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setIsUploadingProfilePhoto(true);
+                            try {
+                              const uploaded = await uploadImageToImgBB(
+                                file,
+                                `profile_${myEffectiveStudentId}`
+                              );
+                              setProfileForm((prev) => ({ ...prev, photoUrl: uploaded.url }));
+                            } finally {
+                              setIsUploadingProfilePhoto(false);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
                 </div>
                 <div className="flex justify-end">
                   <button
+                    disabled={isUploadingProfilePhoto}
                     onClick={() => {
+                      const newPhotoUrl =
+                        profileForm.photoUrl ||
+                        currentUser.photoUrl ||
+                        myStudentRecord?.photoUrl ||
+                        myAdmissionApp?.photoUrl;
                       const updatedUser: UserAccount = {
                         ...currentUser,
                         name: profileForm.name.trim() || currentUser.name,
                         phone: profileForm.phone.trim(),
                         address: profileForm.address.trim(),
                         password: profileForm.password.trim() || currentUser.password,
+                        photoUrl: newPhotoUrl,
                       };
                       setCurrentUser(updatedUser);
                       localStorage.setItem('gausiya_current_user_v3', JSON.stringify(updatedUser));
@@ -1530,13 +1602,24 @@ export default function App() {
                             ? updatedUser
                             : u
                         ),
+                        students: prev.students.map((s) =>
+                          s.studentId.toLowerCase() === myEffectiveStudentId.toLowerCase()
+                            ? { ...s, photoUrl: newPhotoUrl || s.photoUrl }
+                            : s
+                        ),
+                        admissions: prev.admissions.map((a) =>
+                          a.studentId.toLowerCase() === myEffectiveStudentId.toLowerCase()
+                            ? { ...a, photoUrl: newPhotoUrl || a.photoUrl }
+                            : a
+                        ),
                       }));
                       setProfileSavedMsg(true);
                       setTimeout(() => setProfileSavedMsg(false), 2500);
                     }}
-                    className="px-5 py-2 rounded-xl bg-[#144734] text-white text-xs font-extrabold flex items-center gap-1.5 cursor-pointer"
+                    className="px-5 py-2 rounded-xl bg-[#144734] disabled:opacity-60 text-white text-xs font-extrabold flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Save className="w-4 h-4" /> Save Profile
+                    <Save className="w-4 h-4" />
+                    {isUploadingProfilePhoto ? 'Uploading to ImgBB...' : 'Save Profile'}
                   </button>
                 </div>
               </div>
@@ -1569,6 +1652,7 @@ export default function App() {
                       dob: '2013-01-01',
                       phone: '',
                       address: '',
+                      photoUrl: '',
                     });
                     setShowAddStudentModal(true);
                   }}
@@ -1748,12 +1832,19 @@ export default function App() {
                     key={hw.id}
                     className="bg-white p-5 rounded-2xl border border-[#dee6e1] flex items-start justify-between gap-4"
                   >
-                    <div>
+                    <div className="flex-1">
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900">
                         {hw.className} • {hw.subject} • Due: {hw.dueDate}
                       </span>
                       <h3 className="font-extrabold text-base text-[#11261d] mt-1">{hw.title}</h3>
                       <p className="text-xs sm:text-sm text-[#52685e] mt-1">{hw.description}</p>
+                      {hw.attachmentUrl && (
+                        <img
+                          src={hw.attachmentUrl}
+                          alt={hw.title}
+                          className="mt-3 max-h-60 rounded-xl border border-[#dee6e1] object-contain"
+                        />
+                      )}
                     </div>
                     {isAdminOrSuper && (
                       <button
@@ -1887,10 +1978,61 @@ export default function App() {
                     placeholder="Share an announcement or update with the Madarsa..."
                     className="w-full px-3 py-2 rounded-lg border border-[#d6e0da] text-xs"
                   />
-                  <div className="flex justify-end">
+                  {feedImageUrl && (
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <img
+                          src={feedImageUrl}
+                          alt="Feed attachment"
+                          className="w-10 h-10 rounded-lg object-cover border border-emerald-500 flex-shrink-0"
+                        />
+                        <span className="font-bold text-emerald-900 truncate">
+                          ✓ Image Saved on ImgBB ({feedImageUrl})
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFeedImageUrl('')}
+                        className="text-red-600 font-bold cursor-pointer ml-2"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="px-3.5 py-2 rounded-lg border border-dashed border-[#144734]/40 bg-[#f9fbf9] hover:bg-emerald-50 text-xs font-bold text-[#144734] flex items-center gap-1.5 cursor-pointer">
+                      <ImageIcon className="w-4 h-4" />
+                      <span>
+                        {isUploadingFeedImg
+                          ? 'Uploading to ImgBB...'
+                          : feedImageUrl
+                          ? 'Change Image (ImgBB)'
+                          : 'Upload Image (Saves to ImgBB)'}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setIsUploadingFeedImg(true);
+                          try {
+                            const uploaded = await uploadImageToImgBB(
+                              file,
+                              `feed_${Date.now()}`
+                            );
+                            setFeedImageUrl(uploaded.url);
+                          } finally {
+                            setIsUploadingFeedImg(false);
+                          }
+                        }}
+                      />
+                    </label>
                     <button
+                      disabled={isUploadingFeedImg}
                       onClick={() => {
-                        if (!feedText.trim()) return;
+                        if (!feedText.trim() && !feedImageUrl) return;
                         updatePortalState(
                           (prev) => ({
                             ...prev,
@@ -1905,7 +2047,8 @@ export default function App() {
                                   year: 'numeric',
                                 }),
                                 title: feedTitle.trim() || undefined,
-                                content: feedText.trim(),
+                                content: feedText.trim() || 'Shared a photo update',
+                                imageUrl: feedImageUrl || undefined,
                                 likes: 1,
                               },
                               ...prev.feed,
@@ -1916,10 +2059,11 @@ export default function App() {
                         );
                         setFeedTitle('');
                         setFeedText('');
+                        setFeedImageUrl('');
                       }}
-                      className="px-4 py-2 rounded-lg bg-[#144734] text-white text-xs font-extrabold cursor-pointer"
+                      className="px-4 py-2 rounded-lg bg-[#144734] disabled:opacity-60 text-white text-xs font-extrabold cursor-pointer"
                     >
-                      Publish Update
+                      {isUploadingFeedImg ? 'Uploading Image...' : 'Publish Update'}
                     </button>
                   </div>
                 </div>
@@ -1981,6 +2125,13 @@ export default function App() {
                       </div>
                       {post.title && <h3 className="font-extrabold text-base">{post.title}</h3>}
                       <p className="text-xs sm:text-sm text-[#52685e]">{post.content}</p>
+                      {post.imageUrl && (
+                        <img
+                          src={post.imageUrl}
+                          alt={post.title || 'Feed post'}
+                          className="w-full max-h-80 object-contain rounded-xl border border-[#dee6e1] mt-2"
+                        />
+                      )}
                     </div>
                   ));
                 })()}
@@ -2339,6 +2490,49 @@ export default function App() {
                   className="w-full px-3 py-2 rounded-lg border"
                 />
               </div>
+              <div className="col-span-2">
+                <label className="font-bold block mb-1">
+                  Student Photo (Automatically Saved on ImgBB)
+                </label>
+                <div className="flex items-center gap-3">
+                  {studentForm.photoUrl && (
+                    <img
+                      src={studentForm.photoUrl}
+                      alt="Student preview"
+                      className="w-11 h-11 rounded-xl object-cover border border-emerald-500 flex-shrink-0"
+                    />
+                  )}
+                  <label className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[#144734]/40 bg-[#f9fbf9] cursor-pointer hover:bg-emerald-50">
+                    <Upload className="w-4 h-4 text-[#144734]" />
+                    <span className="text-[#52685e]">
+                      {isUploadingStudentPhoto
+                        ? 'Uploading photo to ImgBB...'
+                        : studentForm.photoUrl
+                        ? 'Saved on ImgBB ✓ (Click to change)'
+                        : 'Upload Student Photo (Saves to ImgBB)'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setIsUploadingStudentPhoto(true);
+                        try {
+                          const uploaded = await uploadImageToImgBB(
+                            file,
+                            `student_${studentForm.studentId}`
+                          );
+                          setStudentForm((prev) => ({ ...prev, photoUrl: uploaded.url }));
+                        } finally {
+                          setIsUploadingStudentPhoto(false);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <button
@@ -2348,6 +2542,7 @@ export default function App() {
                 Cancel
               </button>
               <button
+                disabled={isUploadingStudentPhoto}
                 onClick={() => {
                   if (!studentForm.name.trim()) return;
                   updatePortalState(
@@ -2357,6 +2552,7 @@ export default function App() {
                         {
                           id: `stu-${Date.now()}`,
                           ...studentForm,
+                          photoUrl: studentForm.photoUrl || undefined,
                           feeStatus: 'Paid',
                           status: 'Active',
                         },
@@ -2368,9 +2564,9 @@ export default function App() {
                   );
                   setShowAddStudentModal(false);
                 }}
-                className="px-4 py-2 rounded-lg bg-[#144734] text-white text-xs font-extrabold cursor-pointer"
+                className="px-4 py-2 rounded-lg bg-[#144734] disabled:opacity-60 text-white text-xs font-extrabold cursor-pointer"
               >
-                Save Student
+                {isUploadingStudentPhoto ? 'Uploading to ImgBB...' : 'Save Student'}
               </button>
             </div>
           </div>
@@ -2699,6 +2895,35 @@ export default function App() {
                 placeholder="Homework Instructions..."
                 className="w-full px-3 py-2 rounded-lg border"
               />
+              <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[#144734]/40 bg-[#f9fbf9] cursor-pointer hover:bg-emerald-50">
+                <Upload className="w-4 h-4 text-[#144734]" />
+                <span className="text-[#52685e]">
+                  {isUploadingHomeworkImg
+                    ? 'Uploading image to ImgBB...'
+                    : homeworkForm.attachmentUrl
+                    ? 'Worksheet Image Saved on ImgBB ✓'
+                    : 'Upload Homework / Page Photo (Saves to ImgBB)'}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setIsUploadingHomeworkImg(true);
+                    try {
+                      const uploaded = await uploadImageToImgBB(
+                        file,
+                        `homework_${Date.now()}`
+                      );
+                      setHomeworkForm((prev) => ({ ...prev, attachmentUrl: uploaded.url }));
+                    } finally {
+                      setIsUploadingHomeworkImg(false);
+                    }
+                  }}
+                />
+              </label>
             </div>
             <div className="flex justify-end gap-2">
               <button
@@ -2708,6 +2933,7 @@ export default function App() {
                 Cancel
               </button>
               <button
+                disabled={isUploadingHomeworkImg}
                 onClick={() => {
                   if (!homeworkForm.title.trim()) return;
                   updatePortalState(
@@ -2717,6 +2943,7 @@ export default function App() {
                         {
                           id: `hw-${Date.now()}`,
                           ...homeworkForm,
+                          attachmentUrl: homeworkForm.attachmentUrl || undefined,
                           teacherName: currentUser.name,
                           assignedDate: new Date().toISOString().slice(0, 10),
                         },
@@ -2728,9 +2955,9 @@ export default function App() {
                   );
                   setShowAddHomeworkModal(false);
                 }}
-                className="px-4 py-2 rounded-lg bg-[#144734] text-white text-xs font-extrabold cursor-pointer"
+                className="px-4 py-2 rounded-lg bg-[#144734] disabled:opacity-60 text-white text-xs font-extrabold cursor-pointer"
               >
-                Save Homework
+                {isUploadingHomeworkImg ? 'Uploading to ImgBB...' : 'Save Homework'}
               </button>
             </div>
           </div>

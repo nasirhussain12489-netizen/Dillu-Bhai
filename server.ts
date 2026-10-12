@@ -15,6 +15,73 @@ const DB_FILE_PATH = path.join(__dirname, 'madarsa_portal_db.json');
 const app = express();
 app.use(express.json({ limit: '25mb' }));
 
+const IMGBB_API_KEY = process.env.IMGBB_API_KEY || '9551c6c91a49c0c4b17819b26554d812';
+
+// Upload any image to https://imgbb.com/
+app.post('/api/imgbb/upload', async (req: Request, res: Response) => {
+  try {
+    const { imageBase64, name } = req.body || {};
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
+      res.status(400).json({ ok: false, error: 'imageBase64 is required' });
+      return;
+    }
+
+    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
+    const params = new URLSearchParams();
+    params.append('image', cleanBase64);
+    if (name && typeof name === 'string') {
+      params.append('name', name.slice(0, 60));
+    }
+
+    const imgbbRes = await fetch(
+      `https://api.imgbb.com/1/upload?key=${encodeURIComponent(IMGBB_API_KEY)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+      }
+    );
+
+    const data = (await imgbbRes.json()) as {
+      success?: boolean;
+      data?: {
+        id?: string;
+        title?: string;
+        url?: string;
+        display_url?: string;
+        url_viewer?: string;
+        delete_url?: string;
+      };
+      error?: { message?: string };
+    };
+
+    if (!imgbbRes.ok || !data?.data?.url) {
+      res.status(imgbbRes.status || 500).json({
+        ok: false,
+        error: data?.error?.message || 'ImgBB upload failed',
+      });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      id: data.data.id,
+      title: data.data.title,
+      url: data.data.display_url || data.data.url,
+      displayUrl: data.data.display_url || data.data.url,
+      viewerUrl: data.data.url_viewer,
+      deleteUrl: data.data.delete_url,
+    });
+  } catch (err: unknown) {
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : 'ImgBB server upload error',
+    });
+  }
+});
+
 function readPortalDbFromDisk(): Record<string, unknown> | null {
   try {
     if (fs.existsSync(DB_FILE_PATH)) {

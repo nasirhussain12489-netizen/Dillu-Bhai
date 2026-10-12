@@ -17,6 +17,7 @@ import {
   Play,
 } from 'lucide-react';
 import campusHeroImg from '../assets/images/madarsa_campus_hero_1791698178755.jpg';
+import { uploadImageToImgBB } from '../utils/imgbb';
 
 type AiSubTab = 'chat' | 'image' | 'video' | 'search' | 'maps';
 
@@ -212,20 +213,21 @@ export function AiStudioHub() {
     }
   };
 
-  const handleUploadEditImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadEditImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const dataUrl = String(reader.result || '');
+    try {
+      const uploaded = await uploadImageToImgBB(file, `studio_upload_${Date.now()}`);
       setSourceImage({
-        previewUrl: dataUrl,
-        base64: dataUrl.replace(/^data:[^;]+;base64,/, ''),
-        mimeType: file.type || 'image/png',
-        label: file.name,
+        previewUrl: uploaded.url,
+        base64: uploaded.base64DataUrl.replace(/^data:[^;]+;base64,/, ''),
+        mimeType: uploaded.mimeType || 'image/png',
+        label: `${file.name} (Saved on ImgBB)`,
       });
-    };
-    reader.readAsDataURL(file);
+      setGeneratedImageUrl(uploaded.url);
+    } catch {
+      // fallback
+    }
   };
 
   const handleGenerateImage = async (e: React.FormEvent) => {
@@ -247,7 +249,8 @@ export function AiStudioHub() {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Image generation failed');
-      setGeneratedImageUrl(data.imageUrl);
+      const uploaded = await uploadImageToImgBB(data.imageUrl, `studio_poster_${Date.now()}`);
+      setGeneratedImageUrl(uploaded.url);
     } catch (err: unknown) {
       setImageError(err instanceof Error ? err.message : 'Image error');
     } finally {
