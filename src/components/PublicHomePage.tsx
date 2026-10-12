@@ -130,6 +130,11 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
     e.preventDefault();
     setAdmFormError(null);
 
+    if (settings.admissionsOpen === false) {
+      setAdmFormError('Online Admissions are currently CLOSED (OFF) by the Admin.');
+      return;
+    }
+
     if (!admForm.studentName.trim()) {
       setAdmFormError('Please enter Student Full Name.');
       return;
@@ -336,10 +341,16 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
                     setSubmittedApplication(null);
                     setActiveModalTab('admission');
                   }}
-                  className="px-3 sm:px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs sm:text-sm font-bold shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-white text-xs sm:text-sm font-bold shadow-sm flex items-center gap-1.5 transition-all cursor-pointer ${
+                    settings.admissionsOpen !== false
+                      ? 'bg-emerald-700 hover:bg-emerald-800'
+                      : 'bg-red-700 hover:bg-red-800'
+                  }`}
                 >
                   <FilePlus2 className="w-4 h-4" />
-                  <span>Admission Form</span>
+                  <span>
+                    {settings.admissionsOpen !== false ? 'Admission Form' : 'Admission Closed'}
+                  </span>
                 </button>
 
                 <button
@@ -444,10 +455,16 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
                 setSubmittedApplication(null);
                 setActiveModalTab('admission');
               }}
-              className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold px-7 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className={`w-full sm:w-auto text-white text-base font-bold px-7 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                settings.admissionsOpen !== false
+                  ? 'bg-emerald-500 hover:bg-emerald-600'
+                  : 'bg-red-600 hover:bg-red-700'
+              }`}
             >
               <FilePlus2 className="w-5 h-5" />
-              Online Admission Form
+              {settings.admissionsOpen !== false
+                ? 'Online Admission Form (Open)'
+                : 'Online Admission Form (Closed)'}
             </button>
 
             <button
@@ -469,14 +486,31 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
       <section className="py-8 container mx-auto px-4">
         <div className="max-w-5xl mx-auto bg-white rounded-2xl border-2 border-[#144734]/15 shadow-sm p-5 sm:p-6 flex flex-col lg:flex-row items-center justify-between gap-5">
           <div className="space-y-1 text-center lg:text-left">
-            <span className="inline-block text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-100 text-[#144734]">
-              Academic Session {settings.academicYear}
-            </span>
+            <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
+              <span className="inline-block text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-100 text-[#144734]">
+                Academic Session {settings.academicYear}
+              </span>
+              <span
+                className={`inline-block text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                  settings.admissionsOpen !== false
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-red-600 text-white'
+                }`}
+              >
+                {settings.admissionsOpen !== false
+                  ? '● Online Admission: OPEN'
+                  : '● Online Admission: CLOSED'}
+              </span>
+            </div>
             <h2 className="text-lg sm:text-xl font-extrabold text-[#11261d]">
-              New Student Online Admission & Live Approval Status
+              {settings.admissionsOpen !== false
+                ? 'New Student Online Admission & Live Approval Status'
+                : 'Online Admission Form is Currently Closed'}
             </h2>
             <p className="text-xs sm:text-sm text-[#61786e]">
-              Fill out the Online Admission Form with your Gmail to create your Student Account, or check if Super Admin has Approved or Rejected your application.
+              {settings.admissionsOpen !== false
+                ? 'Fill out the Online Admission Form with your Gmail to create your Student Account, or check if Super Admin has Approved or Rejected your application.'
+                : 'New online admission applications are currently paused by the Admin. Students who already applied can still check their live Approval / Rejection status.'}
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 flex-shrink-0">
@@ -485,9 +519,14 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
                 setSubmittedApplication(null);
                 setActiveModalTab('admission');
               }}
-              className="px-5 py-2.5 rounded-xl bg-[#144734] hover:bg-[#0f3627] text-white text-xs sm:text-sm font-extrabold flex items-center gap-2 shadow-sm cursor-pointer"
+              className={`px-5 py-2.5 rounded-xl text-white text-xs sm:text-sm font-extrabold flex items-center gap-2 shadow-sm cursor-pointer ${
+                settings.admissionsOpen !== false
+                  ? 'bg-[#144734] hover:bg-[#0f3627]'
+                  : 'bg-red-600 hover:bg-red-700'
+              }`}
             >
-              <FilePlus2 className="w-4 h-4" /> Fill Admission Form
+              <FilePlus2 className="w-4 h-4" />
+              {settings.admissionsOpen !== false ? 'Fill Admission Form' : 'Admission Closed'}
             </button>
             <button
               onClick={() => {
@@ -1175,7 +1214,52 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
             {/* TAB 2: ONLINE ADMISSION FORM */}
             {activeModalTab === 'admission' && (
               <div className="p-6 max-h-[75vh] overflow-y-auto">
-                {submittedApplication ? (
+                {settings.admissionsOpen === false ? (
+                  <div className="py-8 px-4 text-center space-y-4">
+                    <div className="w-16 h-16 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-xs">
+                      <XCircle className="w-9 h-9" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <span className="inline-block px-3 py-1 rounded-full bg-red-100 text-red-800 text-xs font-extrabold uppercase">
+                        Online Admission Closed (OFF)
+                      </span>
+                      <h4 className="text-xl font-extrabold text-[#11261d]">
+                        Online Admission Form Abhi Band Hai
+                      </h4>
+                      <p className="text-xs sm:text-sm text-[#61786e] max-w-md mx-auto">
+                        The Admin has currently turned <b>OFF</b> new online admission applications for{' '}
+                        <b>{settings.madarsaName}</b>. Please contact the Madarsa office or check back when online admissions reopen.
+                      </p>
+                    </div>
+                    <div className="bg-[#f4f7f5] rounded-xl p-4 border border-[#d6e0da] max-w-md mx-auto text-xs text-[#2d4239] space-y-1">
+                      <div>
+                        <b>Madarsa Helpline:</b> {settings.phone}
+                      </div>
+                      <div>
+                        <b>Email:</b> {settings.email}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFoundApplications(null);
+                          setActiveModalTab('status');
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-[#144734] text-white text-xs font-extrabold cursor-pointer"
+                      >
+                        Check Existing Admission Status
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveModalTab('login')}
+                        className="px-4 py-2.5 rounded-xl bg-amber-500 text-white text-xs font-extrabold cursor-pointer"
+                      >
+                        Go to Portal Login
+                      </button>
+                    </div>
+                  </div>
+                ) : submittedApplication ? (
                   <div className="space-y-5 text-center py-4">
                     <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
                       <CheckCircle2 className="w-8 h-8" />

@@ -831,12 +831,16 @@ export default function App() {
     ...(isSuperAdmin
       ? [
           { id: 'super-admin' as NavSectionId, label: 'Super Admin', icon: Settings },
-          {
-            id: 'admissions' as NavSectionId,
-            label: 'Online Admissions',
-            icon: UserCheck,
-            badge: pendingAdmissionsCount,
-          },
+        ]
+      : []),
+    {
+      id: 'admissions' as NavSectionId,
+      label: 'Online Admissions',
+      icon: UserCheck,
+      badge: pendingAdmissionsCount,
+    },
+    ...(isSuperAdmin
+      ? [
           { id: 'madarsa-settings' as NavSectionId, label: 'Madarsa Settings', icon: Sliders },
         ]
       : []),
@@ -1210,8 +1214,8 @@ export default function App() {
             </div>
           )}
 
-          {/* 2. ONLINE ADMISSIONS SECTION (Super Admin) */}
-          {activeNav === 'admissions' && isSuperAdmin && (
+          {/* 2. ONLINE ADMISSIONS SECTION (Super Admin & Admin) */}
+          {activeNav === 'admissions' && isAdminOrSuper && (
             <AdmissionsAdminPanel
               state={state}
               currentUserName={currentUser.name}

@@ -15,6 +15,9 @@ import {
   Edit2,
   FileText,
   Sparkles,
+  Power,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import { AdmissionApplication, PortalState, StudentItem } from '../types/portal';
 
@@ -257,18 +260,90 @@ export const AdmissionsAdminPanel: React.FC<AdmissionsAdminPanelProps> = ({
     setEditingApp(null);
   };
 
+  const isAdmissionOpen = state.madarsaSettings?.admissionsOpen !== false;
+
+  const handleSetAdmissionFormStatus = (openState: boolean) => {
+    onUpdateState(
+      (prev) => ({
+        ...prev,
+        madarsaSettings: {
+          ...prev.madarsaSettings,
+          admissionsOpen: openState,
+        },
+      }),
+      openState ? 'Turned ON Online Admission Form' : 'Turned OFF Online Admission Form',
+      openState
+        ? 'Online Admission Form is now OPEN (ON) for new students'
+        : 'Online Admission Form is now CLOSED (OFF) on public website'
+    );
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-extrabold text-[#11261d] flex items-center gap-2.5">
-            <UserCheck className="w-6 h-6 text-[#144734]" />
-            Online Admissions Management (Super Admin)
-          </h1>
-          <p className="text-sm text-[#61786e] mt-0.5">
-            Review online admission forms submitted before login. Approve to generate Student ID & send Congratulations, or Reject with reason.
-          </p>
+      {/* Header + Top ON / OFF Button for Online Admission Form */}
+      <div className="bg-white rounded-2xl border-2 border-[#dee6e1] p-4 sm:p-5 shadow-xs space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-[#11261d] flex items-center gap-2.5">
+                <UserCheck className="w-6 h-6 text-[#144734]" />
+                Online Admissions Management
+              </h1>
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-extrabold inline-flex items-center gap-1.5 ${
+                  isAdmissionOpen
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-red-100 text-red-800 border border-red-300'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isAdmissionOpen ? 'bg-emerald-600 animate-pulse' : 'bg-red-600'
+                  }`}
+                />
+                {isAdmissionOpen ? 'ADMISSION FORM: ON (OPEN)' : 'ADMISSION FORM: OFF (CLOSED)'}
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-[#61786e] mt-1">
+              {isAdmissionOpen
+                ? 'Online Admission Form abhi ON (Chalu) hai — Students website par naya admission form bhar sakte hain.'
+                : 'Online Admission Form abhi OFF (Band) hai — Website par naya admission form bharna band kar diya gaya hai.'}
+            </p>
+          </div>
+
+          {/* Dedicated ON / OFF Switch & Action Buttons at the Top */}
+          <div className="flex flex-wrap items-center gap-2.5 bg-[#f4f7f5] p-2 rounded-xl border border-[#d6e0da] self-start lg:self-auto">
+            <span className="text-xs font-extrabold text-[#11261d] px-2 flex items-center gap-1.5">
+              <Power className={`w-4 h-4 ${isAdmissionOpen ? 'text-emerald-600' : 'text-red-600'}`} />
+              Admission Form:
+            </span>
+
+            <button
+              type="button"
+              onClick={() => handleSetAdmissionFormStatus(true)}
+              className={`px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                isAdmissionOpen
+                  ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-600/30'
+                  : 'bg-white text-[#4b6358] hover:bg-emerald-50 border border-[#d6e0da]'
+              }`}
+            >
+              <Unlock className="w-3.5 h-3.5" />
+              ON (Open)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSetAdmissionFormStatus(false)}
+              className={`px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                !isAdmissionOpen
+                  ? 'bg-red-600 text-white shadow-sm ring-2 ring-red-600/30'
+                  : 'bg-white text-[#4b6358] hover:bg-red-50 border border-[#d6e0da]'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5" />
+              OFF (Close)
+            </button>
+          </div>
         </div>
       </div>
 
