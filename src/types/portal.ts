@@ -222,6 +222,33 @@ export interface FeedPost {
   likes: number;
 }
 
+export type ChatRoomType = 'ai' | 'all-students' | 'class' | 'custom-group' | 'direct';
+
+export interface ChatRoom {
+  id: string;
+  name: string;
+  type: ChatRoomType;
+  description?: string;
+  className?: string;
+  participantIds: string[]; // 'ALL' or list of studentIds / emails
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ChatMessageItem {
+  id: string;
+  roomId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: string;
+  text: string;
+  timestamp: string;
+  isAiResponse?: boolean;
+  imageUrl?: string;
+  sources?: Array<{ uri: string; title: string }>;
+  places?: Array<{ uri: string; title: string; reviewSnippets?: string[] }>;
+}
+
 export interface CommitteeMember {
   id: string;
   name: string;
@@ -291,6 +318,8 @@ export interface PortalState {
   onlineClasses: OnlineClassItem[];
   notices: NoticeItem[];
   feed: FeedPost[];
+  chatRooms?: ChatRoom[];
+  chatMessages?: ChatMessageItem[];
 }
 
 export const SUPER_ADMIN_EMAILS = [
@@ -706,6 +735,115 @@ export const INITIAL_PORTAL_STATE: PortalState = {
       title: 'Welcome to Madarsa Gausiya Razviya Digital Portal',
       content: 'Alhamdulillah, our online admission system, student ID cards, and digital grade cards are now live for all students and parents.',
       likes: 48,
+    },
+  ],
+  chatRooms: [
+    {
+      id: 'room-ai-ustaz',
+      name: 'Madarsa AI Ustaz (24/7 Smart AI)',
+      type: 'ai',
+      description: 'Ask any question in Hinglish, Urdu, Hindi, English, or Arabic — Deeni, Academic, Math, Science, or General!',
+      participantIds: ['ALL'],
+      createdBy: 'System',
+      createdAt: '10 Oct 2026',
+    },
+    {
+      id: 'room-all-students',
+      name: 'All Madarsa Students & Teachers Lounge',
+      type: 'all-students',
+      description: 'Common discussion room for all students, teachers, and Super Admin',
+      participantIds: ['ALL'],
+      createdBy: 'Super Admin',
+      createdAt: '10 Oct 2026',
+    },
+    {
+      id: 'room-class-1',
+      name: 'Class 1 — Official Group',
+      type: 'class',
+      className: 'Class 1',
+      description: 'Class 1 students and teachers discussion group',
+      participantIds: ['ALL'],
+      createdBy: 'Super Admin',
+      createdAt: '10 Oct 2026',
+    },
+    {
+      id: 'room-class-2',
+      name: 'Class 2 — Official Group',
+      type: 'class',
+      className: 'Class 2',
+      description: 'Class 2 students and teachers discussion group',
+      participantIds: ['ALL'],
+      createdBy: 'Super Admin',
+      createdAt: '10 Oct 2026',
+    },
+    {
+      id: 'room-class-3',
+      name: 'Class 3 — Official Group',
+      type: 'class',
+      className: 'Class 3',
+      description: 'Class 3 students and teachers discussion group',
+      participantIds: ['ALL'],
+      createdBy: 'Super Admin',
+      createdAt: '10 Oct 2026',
+    },
+    {
+      id: 'room-class-4',
+      name: 'Class 4 — Official Group',
+      type: 'class',
+      className: 'Class 4',
+      description: 'Class 4 students and teachers discussion group',
+      participantIds: ['ALL'],
+      createdBy: 'Super Admin',
+      createdAt: '10 Oct 2026',
+    },
+    {
+      id: 'room-class-5',
+      name: 'Class 5 — Official Group',
+      type: 'class',
+      className: 'Class 5',
+      description: 'Class 5 students and teachers discussion group',
+      participantIds: ['ALL'],
+      createdBy: 'Super Admin',
+      createdAt: '10 Oct 2026',
+    },
+    {
+      id: 'room-hifz-group',
+      name: 'Hifz & Tajweed Study Circle',
+      type: 'custom-group',
+      description: 'Special group for Quran Nazra, Hifz, and Naat competition preparation',
+      participantIds: ['ALL'],
+      createdBy: 'Super Admin',
+      createdAt: '11 Oct 2026',
+    },
+  ],
+  chatMessages: [
+    {
+      id: 'msg-ai-welcome',
+      roomId: 'room-ai-ustaz',
+      senderId: 'AI-USTAZ',
+      senderName: 'Madarsa AI Ustaz',
+      senderRole: 'AI Assistant',
+      text: 'Assalamu Alaikum Wa Rahmatullahi Wa Barakatuh! Main Madarsa Gausiya Razviya ka Advanced AI Assistant hoon. Aap mujhse Deeni taleem (Quran, Tajweed, Fiqh, Hadith, Seerat), Duniyaawi subjects (Math, Science, English, GK, Coding), Homework, Exam preparation, ya koi bhi sawal puch sakte hain!',
+      timestamp: '10:00 AM',
+      isAiResponse: true,
+    },
+    {
+      id: 'msg-all-1',
+      roomId: 'room-all-students',
+      senderId: 'usr-super-2',
+      senderName: 'Dilshad Ansari',
+      senderRole: 'Super Admin',
+      text: 'Assalamu Alaikum pyare talaba! Is chat hub mein aap sabhi students ek saath baat kar sakte hain, apne Class Group mein padhai discuss kar sakte hain, aur kisi bhi student se alag-alag (1-on-1) bhi baat kar sakte hain.',
+      timestamp: '10:15 AM',
+    },
+    {
+      id: 'msg-cls4-1',
+      roomId: 'room-class-4',
+      senderId: 'MGR-2026-1001',
+      senderName: 'Mohammad Arshad Raza',
+      senderRole: 'Student',
+      text: 'Assalamu Alaikum Class 4 ke dosto! Kal Tajweed class mein Surah Al-Mulk ki tilawat hogi.',
+      timestamp: '11:20 AM',
     },
   ],
 };

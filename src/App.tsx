@@ -37,6 +37,7 @@ import {
   Sliders,
   KeyRound,
   Save,
+  MessageSquare,
 } from 'lucide-react';
 import {
   auth,
@@ -61,6 +62,7 @@ import { MadarsaSettingsPanel } from './components/MadarsaSettingsPanel';
 import { OfficialGradeCard, StudentIdCardView } from './components/GradeCardView';
 import { MadarsaLogo } from './components/MadarsaLogo';
 import { AttendanceSection } from './components/AttendanceSection';
+import { MadarsaChatHub } from './components/MadarsaChatHub';
 import {
   AdmissionApplication,
   INITIAL_PORTAL_STATE,
@@ -88,6 +90,7 @@ type NavSectionId =
   | 'online-classes'
   | 'notices'
   | 'feed'
+  | 'chat'
   | 'reports'
   | 'activity-logs'
   | 'profile'
@@ -838,6 +841,7 @@ export default function App() {
         ]
       : []),
     { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
+    { id: 'chat', label: 'AI & Student Chat Hub', icon: MessageSquare },
     { id: 'students', label: 'Students', icon: GraduationCap },
     { id: 'teachers', label: 'Teachers', icon: Users },
     { id: 'parents', label: 'Parents', icon: Users },
@@ -856,9 +860,10 @@ export default function App() {
     { id: 'profile', label: 'My Profile', icon: User },
   ];
 
-  // Student strictly gets ONLY their own read-only views!
+  // Student strictly gets ONLY their own read-only views + AI & Student Chat Hub!
   const studentSidebarItems: { id: NavSectionId; label: string; icon: React.ElementType }[] = [
     { id: 'dashboard', label: 'My Dashboard & Status', icon: LayoutGrid },
+    { id: 'chat', label: 'AI & Student Chat Hub', icon: MessageSquare },
     { id: 'results', label: 'My Result (Grade Card)', icon: BarChart3 },
     { id: 'profile', label: 'My Profile & ID Card', icon: User },
     { id: 'notices', label: 'Notices', icon: Bell },
@@ -2172,6 +2177,15 @@ export default function App() {
                 ))}
               </div>
             </div>
+          )}
+
+          {activeNav === 'chat' && (
+            <MadarsaChatHub
+              state={state}
+              currentUser={currentUser}
+              effectiveStudentId={myEffectiveStudentId}
+              onUpdateState={updatePortalState}
+            />
           )}
 
           {activeNav === 'ai-studio' && isAdminOrSuper && <AiStudioHub />}

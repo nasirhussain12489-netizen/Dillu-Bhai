@@ -44,8 +44,8 @@ interface VideoJob {
 export function AiStudioHub() {
   const [subTab, setSubTab] = useState<AiSubTab>('chat');
 
-  // 1. Multi-Turn Gemini Chatbot (gemini-3.1-pro-preview, gemini-3.5-flash, gemini-3.1-flash-lite)
-  const [chatModel, setChatModel] = useState<string>('gemini-3.5-flash');
+  // 1. Multi-Turn Gemini Chatbot (gemini-3.8-flash, gemini-3.1-flash-lite, gemini-3.1-pro-preview)
+  const [chatModel, setChatModel] = useState<string>('gemini-3.8-flash');
   const [chatRole, setChatRole] = useState<string>(
     'You are the AI Academic & Administrative Assistant for Gausiya Madarsa Portal. Help teachers, students, parents, and administrators with lesson plans, Urdu/Arabic/English notices, exam papers, and school administration.'
   );
@@ -423,9 +423,9 @@ export function AiStudioHub() {
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-slate-600">Model:</span>
               {[
-                { id: 'gemini-3.1-pro-preview', label: 'Pro 3.1 (Complex)' },
-                { id: 'gemini-3.5-flash', label: 'Flash 3.5 (General)' },
-                { id: 'gemini-3.1-flash-lite', label: 'Flash Lite (Fast)' },
+                { id: 'gemini-3.8-flash', label: 'Flash 3.8 (Recommended)' },
+                { id: 'gemini-3.1-flash-lite', label: 'Flash Lite (Instant)' },
+                { id: 'gemini-flash-latest', label: 'Gemini Flash (Latest)' },
               ].map((m) => (
                 <button
                   key={m.id}
