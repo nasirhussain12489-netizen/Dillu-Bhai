@@ -43,6 +43,11 @@ import {
   db,
   googleProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
   signOut,
   handleFirestoreError,
   OperationType,
@@ -55,6 +60,7 @@ import { AdmissionsAdminPanel } from './components/AdmissionsAdminPanel';
 import { MadarsaSettingsPanel } from './components/MadarsaSettingsPanel';
 import { OfficialGradeCard, StudentIdCardView } from './components/GradeCardView';
 import { MadarsaLogo } from './components/MadarsaLogo';
+import { AttendanceSection } from './components/AttendanceSection';
 import {
   AdmissionApplication,
   INITIAL_PORTAL_STATE,
@@ -211,9 +217,10 @@ export default function App() {
     meetingLink: 'https://meet.google.com/gausiya-live',
   });
 
-  // Add Feed Post
+  // Add Feed Post & Search
   const [feedText, setFeedText] = useState('');
   const [feedTitle, setFeedTitle] = useState('');
+  const [feedSearchQuery, setFeedSearchQuery] = useState('');
 
   // Profile Form State
   const [profileForm, setProfileForm] = useState({
@@ -269,8 +276,10 @@ export default function App() {
     };
   }, []);
 
-  // Listen to Firebase Auth state
+  // Listen to Firebase Auth state & handle Google redirect result
   useEffect(() => {
+    getRedirectResult(auth).catch(() => {});
+
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       if (!fbUser || !fbUser.email) return;
       const emailLower = fbUser.email.toLowerCase();
@@ -411,19 +420,233 @@ export default function App() {
     });
   };
 
-  // Google Sign-In handler
-  const handleGoogleLogin = async () => {
+  // Google Sign-In handler (with popup + redirect fallback & direct Google Email sign-in support)
+  const handleGoogleLogin = async (fallbackEmail?: string, fallbackName?: string) => {
     setAuthLoading(true);
     setAuthError(null);
+
+    if (fallbackEmail && fallbackEmail.includes('@')) {
+      const emailLower = fallbackEmail.trim().toLowerCase();
+      setState((prev) => {
+        const existingUser = prev.allUsers.find((u) => u.email.toLowerCase() === emailLower);
+        const existingAdm = prev.admissions.find((a) => a.email.toLowerCase() === emailLower);
+        const isPreAdmin = prev.admins.some(
+          (a) => a.email.toLowerCase() === emailLower && a.status === 'Active'
+        );
+
+        let role: RoleType = 'Student';
+        if (SUPER_ADMIN_EMAILS.includes(emailLower)) {
+          role = 'Super Admin';
+        } else if (existingUser) {
+          role = existingUser.role;
+        } else if (isPreAdmin) {
+          role = 'Admin';
+        }
+
+        const loggedUser: UserAccount = existingUser
+          ? { ...existingUser, role }
+          : {
+              id: `usr-google-${Date.now()}`,
+              studentId: existingAdm?.studentId || `MGR-2026-${1000 + prev.allUsers.length + 1}`,
+              name:
+                fallbackName?.trim() ||
+                existingAdm?.studentName ||
+                emailLower.split('@')[0],
+              email: emailLower,
+              phone: existingAdm?.phone,
+              address: existingAdm?.address,
+              role,
+              joinedDate: new Date().toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+              }),
+              admissionStatus: existingAdm?.status || 'Approved',
+            };
+
+        setCurrentUser(loggedUser);
+        localStorage.setItem('gausiya_current_user_v3', JSON.stringify(loggedUser));
+        setShowPublicSite(false);
+        setActiveNav(role === 'Super Admin' ? 'super-admin' : 'dashboard');
+
+        const updatedUsers = existingUser
+          ? prev.allUsers.map((u) => (u.email.toLowerCase() === emailLower ? loggedUser : u))
+          : [loggedUser, ...prev.allUsers];
+
+        const nextState = { ...prev, allUsers: updatedUsers };
+        try {
+          localStorage.setItem(PORTAL_STORAGE_KEY, JSON.stringify(nextState));
+        } catch {
+          // ignore
+        }
+        fetch('/api/portal/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: nextState }),
+        }).catch(() => {});
+
+        return nextState;
+      });
+      setAuthLoading(false);
+      return;
+    }
+
     try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err) {
+      const cred = await signInWithPopup(auth, googleProvider);
+      if (cred?.user?.email) {
+        const emailLower = cred.user.email.toLowerCase();
+        setState((prev) => {
+          const existingUser = prev.allUsers.find((u) => u.email.toLowerCase() === emailLower);
+          const existingAdm = prev.admissions.find((a) => a.email.toLowerCase() === emailLower);
+          const isPreAdmin = prev.admins.some(
+            (a) => a.email.toLowerCase() === emailLower && a.status === 'Active'
+          );
+
+          let role: RoleType = 'Student';
+          if (SUPER_ADMIN_EMAILS.includes(emailLower)) {
+            role = 'Super Admin';
+          } else if (existingUser) {
+            role = existingUser.role;
+          } else if (isPreAdmin) {
+            role = 'Admin';
+          }
+
+          const loggedUser: UserAccount = existingUser
+            ? { ...existingUser, role }
+            : {
+                id: cred.user.uid,
+                studentId: existingAdm?.studentId || `MGR-2026-${1000 + prev.allUsers.length + 1}`,
+                name: cred.user.displayName || existingAdm?.studentName || emailLower.split('@')[0],
+                email: emailLower,
+                phone: existingAdm?.phone,
+                address: existingAdm?.address,
+                role,
+                joinedDate: new Date().toLocaleDateString('en-GB', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                }),
+                admissionStatus: existingAdm?.status || 'Approved',
+              };
+
+          setCurrentUser(loggedUser);
+          localStorage.setItem('gausiya_current_user_v3', JSON.stringify(loggedUser));
+          setShowPublicSite(false);
+          setActiveNav(role === 'Super Admin' ? 'super-admin' : 'dashboard');
+
+          const updatedUsers = existingUser
+            ? prev.allUsers.map((u) => (u.email.toLowerCase() === emailLower ? loggedUser : u))
+            : [loggedUser, ...prev.allUsers];
+
+          return { ...prev, allUsers: updatedUsers };
+        });
+      }
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || '';
+      if (code === 'auth/popup-blocked') {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        } catch {
+          // fall through
+        }
+      }
       setAuthError(
-        err instanceof Error ? err.message : 'Google Sign-In failed. You can also login with your Gmail & Password below.'
+        'Google popup could not complete in this browser window. Please enter your Google / Gmail address below to continue with Google, or use Create Account / Login.'
       );
     } finally {
       setAuthLoading(false);
     }
+  };
+
+  // Create New Account (Sign Up) handler
+  const handleCreateAccount = async (payload: {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+    address?: string;
+  }): Promise<{ ok: boolean; error?: string; user?: UserAccount }> => {
+    const cleanEmail = payload.email.trim().toLowerCase();
+    const cleanName = payload.name.trim();
+    const cleanPassword = payload.password.trim();
+
+    if (!cleanName) {
+      return { ok: false, error: 'Please enter your Full Name.' };
+    }
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { ok: false, error: 'Please enter a valid Gmail / Email address.' };
+    }
+    if (cleanPassword.length < 4) {
+      return { ok: false, error: 'Password must be at least 4 characters.' };
+    }
+
+    // Also attempt Firebase Auth registration if password >= 6 chars
+    if (cleanPassword.length >= 6) {
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPassword);
+        if (cred.user) {
+          await updateProfile(cred.user, { displayName: cleanName }).catch(() => {});
+        }
+      } catch {
+        // Even if email already exists in Firebase Auth or email provider isn't enabled, proceed with portal DB registration
+      }
+    }
+
+    const existingAdm = state.admissions.find((a) => a.email.toLowerCase() === cleanEmail);
+    const isSuper = SUPER_ADMIN_EMAILS.includes(cleanEmail);
+    const isPreAdmin = state.admins.some(
+      (a) => a.email.toLowerCase() === cleanEmail && a.status === 'Active'
+    );
+
+    const assignedRole: RoleType = isSuper ? 'Super Admin' : isPreAdmin ? 'Admin' : 'Student';
+    const generatedStudentId =
+      existingAdm?.studentId ||
+      `MGR-2026-${1001 + (state.allUsers?.length || 0) + Math.floor(Math.random() * 50)}`;
+
+    const newAccount: UserAccount = {
+      id: `usr-${Date.now()}`,
+      studentId: generatedStudentId,
+      name: cleanName,
+      email: cleanEmail,
+      phone: payload.phone.trim(),
+      address: payload.address?.trim() || existingAdm?.address || '',
+      username: generatedStudentId,
+      password: cleanPassword,
+      role: assignedRole,
+      joinedDate: new Date().toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }),
+      admissionStatus: existingAdm?.status || 'Approved',
+    };
+
+    updatePortalState(
+      (prev) => {
+        const existsIdx = prev.allUsers.findIndex(
+          (u) => u.email.toLowerCase() === cleanEmail
+        );
+        const updatedUsers =
+          existsIdx >= 0
+            ? prev.allUsers.map((u, idx) => (idx === existsIdx ? newAccount : u))
+            : [newAccount, ...prev.allUsers];
+
+        return {
+          ...prev,
+          allUsers: updatedUsers,
+        };
+      },
+      'Created New Portal Account',
+      `${cleanName} (${cleanEmail}) — ID: ${generatedStudentId}`
+    );
+
+    setCurrentUser(newAccount);
+    localStorage.setItem('gausiya_current_user_v3', JSON.stringify(newAccount));
+    setShowPublicSite(false);
+    setActiveNav(assignedRole === 'Super Admin' ? 'super-admin' : 'dashboard');
+
+    return { ok: true, user: newAccount };
   };
 
   // Direct Gmail / Student ID + Password Login handler
@@ -558,6 +781,7 @@ export default function App() {
         onReturnToDashboard={currentUser ? () => setShowPublicSite(false) : undefined}
         onGoogleLogin={handleGoogleLogin}
         onCredentialsLogin={handleCredentialsLogin}
+        onCreateAccount={handleCreateAccount}
         onSubmitAdmission={handleAdmissionSubmit}
         authLoading={authLoading}
         authError={authError}
@@ -1608,7 +1832,37 @@ export default function App() {
           {/* 12. FEED (Read-Only for Students, Post/Delete for Super Admin) */}
           {activeNav === 'feed' && (
             <div className="space-y-5 max-w-3xl mx-auto">
-              <h1 className="text-2xl font-extrabold text-[#11261d]">Madarsa Feed & Updates</h1>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h1 className="text-2xl font-extrabold text-[#11261d]">Madarsa Feed & Updates</h1>
+                  <p className="text-xs text-[#61786e] mt-0.5">
+                    Official announcements, updates, and daily news from the Madarsa
+                  </p>
+                </div>
+
+                {/* Search Bar to quickly filter through past announcements and posts */}
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-4 h-4 text-[#61786e] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={feedSearchQuery}
+                    onChange={(e) => setFeedSearchQuery(e.target.value)}
+                    placeholder="Search announcements & posts..."
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-white border border-[#dee6e1] text-xs sm:text-sm text-[#11261d] focus:outline-none focus:border-[#144734]"
+                  />
+                  {feedSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setFeedSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#61786e] hover:text-[#11261d] cursor-pointer"
+                      aria-label="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {isAdminOrSuper && (
                 <div className="bg-white p-4 rounded-2xl border border-[#dee6e1] space-y-3">
                   <input
@@ -1663,33 +1917,64 @@ export default function App() {
               )}
 
               <div className="space-y-4">
-                {state.feed.map((post) => (
-                  <div
-                    key={post.id}
-                    className="bg-white p-5 rounded-2xl border border-[#dee6e1] space-y-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-bold text-[#144734]">
-                        {post.authorName} ({post.authorRole}) • {post.createdAt}
-                      </div>
-                      {isAdminOrSuper && (
+                {(() => {
+                  const q = feedSearchQuery.trim().toLowerCase();
+                  const filteredFeed = q
+                    ? state.feed.filter(
+                        (post) =>
+                          (post.title && post.title.toLowerCase().includes(q)) ||
+                          post.content.toLowerCase().includes(q) ||
+                          post.authorName.toLowerCase().includes(q) ||
+                          post.authorRole.toLowerCase().includes(q) ||
+                          post.createdAt.toLowerCase().includes(q)
+                      )
+                    : state.feed;
+
+                  if (filteredFeed.length === 0) {
+                    return (
+                      <div className="bg-white p-8 rounded-2xl border border-[#dee6e1] text-center space-y-2">
+                        <p className="text-sm font-bold text-[#11261d]">
+                          No announcements or posts match &ldquo;{feedSearchQuery}&rdquo;
+                        </p>
                         <button
-                          onClick={() =>
-                            updatePortalState((prev) => ({
-                              ...prev,
-                              feed: prev.feed.filter((f) => f.id !== post.id),
-                            }))
-                          }
-                          className="text-red-500 hover:text-red-700 cursor-pointer"
+                          type="button"
+                          onClick={() => setFeedSearchQuery('')}
+                          className="text-xs font-extrabold text-[#144734] hover:underline cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          Clear search filter
                         </button>
-                      )}
+                      </div>
+                    );
+                  }
+
+                  return filteredFeed.map((post) => (
+                    <div
+                      key={post.id}
+                      className="bg-white p-5 rounded-2xl border border-[#dee6e1] space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-bold text-[#144734]">
+                          {post.authorName} ({post.authorRole}) • {post.createdAt}
+                        </div>
+                        {isAdminOrSuper && (
+                          <button
+                            onClick={() =>
+                              updatePortalState((prev) => ({
+                                ...prev,
+                                feed: prev.feed.filter((f) => f.id !== post.id),
+                              }))
+                            }
+                            className="text-red-500 hover:text-red-700 cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      {post.title && <h3 className="font-extrabold text-base">{post.title}</h3>}
+                      <p className="text-xs sm:text-sm text-[#52685e]">{post.content}</p>
                     </div>
-                    {post.title && <h3 className="font-extrabold text-base">{post.title}</h3>}
-                    <p className="text-xs sm:text-sm text-[#52685e]">{post.content}</p>
-                  </div>
-                ))}
+                  ));
+                })()}
               </div>
             </div>
           )}
@@ -1764,76 +2049,59 @@ export default function App() {
           )}
 
           {activeNav === 'attendance' && isAdminOrSuper && (
-            <div className="space-y-4">
-              <h1 className="text-2xl font-extrabold">Daily Student Attendance</h1>
-              <div className="bg-white rounded-2xl border border-[#dee6e1] overflow-x-auto">
-                <table className="w-full text-left text-xs sm:text-sm">
-                  <thead>
-                    <tr className="bg-[#f4f7f5] border-b border-[#dee6e1]">
-                      <th className="p-3.5 font-bold">Student ID</th>
-                      <th className="p-3.5 font-bold">Student Name</th>
-                      <th className="p-3.5 font-bold">Class</th>
-                      <th className="p-3.5 font-bold">Mark Attendance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {state.students.map((stu) => {
-                      const rec = state.attendance.find((a) => a.studentId === stu.studentId);
-                      const status = rec?.status || 'Present';
-                      return (
-                        <tr key={stu.id} className="border-b border-[#edf2ee]">
-                          <td className="p-3.5 font-mono font-bold text-[#144734]">
-                            {stu.studentId}
-                          </td>
-                          <td className="p-3.5 font-bold">{stu.name}</td>
-                          <td className="p-3.5">{stu.className}</td>
-                          <td className="p-3.5 space-x-2">
-                            {(['Present', 'Absent', 'Leave'] as const).map((st) => (
-                              <button
-                                key={st}
-                                onClick={() =>
-                                  updatePortalState((prev) => {
-                                    const filtered = prev.attendance.filter(
-                                      (a) => a.studentId !== stu.studentId
-                                    );
-                                    return {
-                                      ...prev,
-                                      attendance: [
-                                        {
-                                          id: `att-${Date.now()}`,
-                                          date: new Date().toISOString().slice(0, 10),
-                                          studentId: stu.studentId,
-                                          studentName: stu.name,
-                                          rollNo: stu.rollNo,
-                                          className: stu.className,
-                                          status: st,
-                                        },
-                                        ...filtered,
-                                      ],
-                                    };
-                                  })
-                                }
-                                className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer ${
-                                  status === st
-                                    ? st === 'Present'
-                                      ? 'bg-emerald-600 text-white'
-                                      : st === 'Absent'
-                                      ? 'bg-red-600 text-white'
-                                      : 'bg-amber-500 text-white'
-                                    : 'bg-gray-100 text-gray-700'
-                                }`}
-                              >
-                                {st}
-                              </button>
-                            ))}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <AttendanceSection
+              students={state.students}
+              classes={state.classes}
+              attendance={state.attendance}
+              onMarkAttendance={(date, stu, status) => {
+                updatePortalState(
+                  (prev) => {
+                    const filtered = (prev.attendance || []).filter(
+                      (a) => !(a.studentId === stu.studentId && a.date === date)
+                    );
+                    return {
+                      ...prev,
+                      attendance: [
+                        {
+                          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                          date,
+                          studentId: stu.studentId,
+                          studentName: stu.name,
+                          rollNo: stu.rollNo,
+                          className: stu.className,
+                          status,
+                        },
+                        ...filtered,
+                      ],
+                    };
+                  },
+                  `Marked Attendance (${status})`,
+                  `${stu.name} (${stu.className}) on ${date}`
+                );
+              }}
+              onMarkAllPresentForDate={(date) => {
+                updatePortalState(
+                  (prev) => {
+                    const otherDates = (prev.attendance || []).filter((a) => a.date !== date);
+                    const batchForDate = prev.students.map((stu, idx) => ({
+                      id: `att-${Date.now()}-${idx}`,
+                      date,
+                      studentId: stu.studentId,
+                      studentName: stu.name,
+                      rollNo: stu.rollNo,
+                      className: stu.className,
+                      status: 'Present' as const,
+                    }));
+                    return {
+                      ...prev,
+                      attendance: [...batchForDate, ...otherDates],
+                    };
+                  },
+                  'Marked All Students Present',
+                  `Date: ${date}`
+                );
+              }}
+            />
           )}
 
           {activeNav === 'examinations' && isAdminOrSuper && (

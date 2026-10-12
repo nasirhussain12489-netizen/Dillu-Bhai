@@ -162,8 +162,52 @@ export const MadarsaSettingsPanel: React.FC<MadarsaSettingsPanelProps> = ({
       <div className="bg-white rounded-2xl border border-[#dee6e1] p-5 shadow-xs space-y-4">
         <h2 className="text-base font-extrabold text-[#11261d] flex items-center gap-2 border-b border-[#edf2ee] pb-3">
           <Building2 className="w-5 h-5 text-[#144734]" />
-          1. Madarsa Identity, Header & Hero Banner Details
+          1. Madarsa Official Logo, Identity, Header & Hero Banner Details
         </h2>
+
+        {/* Official Transparent Logo & Automatic BG Remover */}
+        <div className="p-4 rounded-xl bg-[#f6f9f7] border border-[#dee6e1] flex flex-col sm:flex-row items-center gap-4">
+          <div className="w-20 h-20 rounded-2xl border border-[#dee6e1] bg-white/60 flex items-center justify-center p-2 flex-shrink-0">
+            <MadarsaLogo customLogoUrl={form.logoUrl} className="w-16 h-16" />
+          </div>
+          <div className="flex-1 space-y-1.5 text-center sm:text-left">
+            <div className="text-sm font-extrabold text-[#11261d]">
+              Official Madarsa Logo & Icon (Background Removed / Transparent)
+            </div>
+            <p className="text-xs text-[#61786e]">
+              The transparent Graduation &apos;G&apos; Emblem with Open Book is active across all headers, hero banners, login modals, Student ID cards, and Grade Cards. You can also upload any custom logo below and its background will be automatically removed.
+            </p>
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+              <label className="px-3.5 py-1.5 rounded-lg bg-[#144734] text-white text-xs font-bold cursor-pointer hover:bg-[#0f3627] transition-colors">
+                Upload Custom Logo (Auto Remove BG)
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const transparentDataUrl = await removeLogoBackground(file);
+                      setForm((prev) => ({ ...prev, logoUrl: transparentDataUrl }));
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                />
+              </label>
+              {form.logoUrl && (
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, logoUrl: undefined }))}
+                  className="px-3 py-1.5 rounded-lg border border-[#dee6e1] bg-white text-xs font-bold text-[#11261d] hover:bg-gray-50 cursor-pointer"
+                >
+                  Reset to Default G Emblem Logo
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div>

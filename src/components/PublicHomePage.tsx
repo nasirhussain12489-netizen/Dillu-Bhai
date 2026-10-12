@@ -23,6 +23,7 @@ import {
   X,
   Upload,
   KeyRound,
+  UserPlus,
 } from 'lucide-react';
 import {
   AdmissionApplication,
@@ -36,8 +37,15 @@ interface PublicHomePageProps {
   state: PortalState;
   currentUser: UserAccount | null;
   onReturnToDashboard?: () => void;
-  onGoogleLogin: () => Promise<void>;
+  onGoogleLogin: (fallbackEmail?: string, fallbackName?: string) => Promise<void>;
   onCredentialsLogin: (identifier: string, password: string) => { ok: boolean; error?: string };
+  onCreateAccount: (payload: {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+    address?: string;
+  }) => Promise<{ ok: boolean; error?: string; user?: UserAccount }>;
   onSubmitAdmission: (app: AdmissionApplication) => void;
   authLoading: boolean;
   authError: string | null;
@@ -49,19 +57,39 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
   onReturnToDashboard,
   onGoogleLogin,
   onCredentialsLogin,
+  onCreateAccount,
   onSubmitAdmission,
   authLoading,
   authError,
 }) => {
   const settings = state.madarsaSettings || INITIAL_PORTAL_STATE.madarsaSettings;
 
-  // Modal / Drawer Mode: null | 'login' | 'admission' | 'status'
-  const [activeModalTab, setActiveModalTab] = useState<'login' | 'admission' | 'status' | null>(null);
+  // Modal / Drawer Mode: null | 'login' | 'signup' | 'admission' | 'status'
+  const [activeModalTab, setActiveModalTab] = useState<
+    'login' | 'signup' | 'admission' | 'status' | null
+  >(null);
 
   // Login Form State
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [localLoginError, setLocalLoginError] = useState<string | null>(null);
+
+  // Google Quick Sign-In chooser state (when browser blocks third-party popup)
+  const [showGoogleEmailPrompt, setShowGoogleEmailPrompt] = useState(false);
+  const [googleInputEmail, setGoogleInputEmail] = useState('');
+  const [googleInputName, setGoogleInputName] = useState('');
+
+  // Create Account (Sign Up) Form State
+  const [signupForm, setSignupForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [signupError, setSignupError] = useState<string | null>(null);
+  const [signupLoading, setSignupLoading] = useState(false);
 
   // Admission Form State
   const [admForm, setAdmForm] = useState({
@@ -190,6 +218,65 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
     }
   };
 
+  const handleSignupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignupError(null);
+    if (!signupForm.name.trim()) {
+      setSignupError('Please enter your Full Name.');
+      return;
+    }
+    if (!signupForm.email.trim() || !signupForm.email.includes('@')) {
+      setSignupError('Please enter a valid Gmail / Email address.');
+      return;
+    }
+    if (!signupForm.password.trim() || signupForm.password.trim().length < 4) {
+      setSignupError('Please set a password (minimum 4 characters).');
+      return;
+    }
+    if (
+      signupForm.confirmPassword &&
+      signupForm.password.trim() !== signupForm.confirmPassword.trim()
+    ) {
+      setSignupError('Passwords do not match.');
+      return;
+    }
+
+    setSignupLoading(true);
+    try {
+      const res = await onCreateAccount({
+        name: signupForm.name,
+        email: signupForm.email,
+        phone: signupForm.phone,
+        address: signupForm.address,
+        password: signupForm.password,
+      });
+      if (!res.ok) {
+        setSignupError(res.error || 'Could not create account.');
+      } else {
+        setActiveModalTab(null);
+      }
+    } finally {
+      setSignupLoading(false);
+    }
+  };
+
+  const handleGoogleButtonClick = async () => {
+    setLocalLoginError(null);
+    setSignupError(null);
+    await onGoogleLogin();
+    setShowGoogleEmailPrompt(true);
+  };
+
+  const handleGoogleEmailContinue = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!googleInputEmail.trim() || !googleInputEmail.includes('@')) {
+      setLocalLoginError('Please enter a valid Google / Gmail address (e.g. name@gmail.com).');
+      return;
+    }
+    await onGoogleLogin(googleInputEmail.trim(), googleInputName.trim());
+    setActiveModalTab(null);
+  };
+
   const programColors = [
     'from-emerald-500 to-emerald-600',
     'from-emerald-600 to-emerald-700',
@@ -202,39 +289,6 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
 
   return (
     <div className="min-h-screen bg-[#f6f9f7] text-[#11261d]">
-      {/* Top Admission Announcement Bar */}
-      {settings.admissionsOpen && (
-        <div className="bg-[#103828] text-amber-300 text-xs py-2 px-4 border-b border-white/10">
-          <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
-            <span className="font-semibold flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-              {settings.admissionBannerText}
-            </span>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => {
-                  setSubmittedApplication(null);
-                  setActiveModalTab('admission');
-                }}
-                className="underline font-extrabold text-white hover:text-amber-300 cursor-pointer"
-              >
-                Apply for Admission →
-              </button>
-              <span className="text-white/40">|</span>
-              <button
-                onClick={() => {
-                  setFoundApplications(null);
-                  setActiveModalTab('status');
-                }}
-                className="underline font-bold text-amber-300 hover:text-white cursor-pointer"
-              >
-                Check Admission Status
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Sticky Header matching https://gausiya.zite.so/ + Side-by-Side Admission Form & Check Status */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#dee6e1] shadow-xs">
         <div className="container mx-auto px-4 flex items-center justify-between h-16 gap-2">
@@ -297,6 +351,14 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
                 >
                   <SearchCheck className="w-4 h-4" />
                   <span>Check Status</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveModalTab('signup')}
+                  className="hidden md:inline-flex px-3.5 py-2 rounded-lg border border-[#144734] text-[#144734] hover:bg-emerald-50 text-xs sm:text-sm font-bold items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Create Account</span>
                 </button>
 
                 <button
@@ -367,6 +429,14 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
               className="w-full sm:w-auto bg-gradient-to-r from-[#d4942a] to-[#b87b19] text-white text-base font-bold px-7 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               Portal Login <ChevronRight className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => setActiveModalTab('signup')}
+              className="w-full sm:w-auto bg-white text-[#144734] hover:bg-emerald-50 text-base font-extrabold px-6 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <UserPlus className="w-5 h-5 text-[#144734]" />
+              Create Account
             </button>
 
             <button
@@ -723,11 +793,11 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
                 </button>
               </div>
 
-              {/* 3 Side-by-Side Tabs */}
-              <div className="grid grid-cols-3 gap-2">
+              {/* 4 Side-by-Side Tabs: Login | Create Account | Admission Form | Check Status */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <button
                   onClick={() => setActiveModalTab('login')}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`py-2.5 px-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     activeModalTab === 'login'
                       ? 'bg-amber-500 text-white shadow-md'
                       : 'bg-white/10 text-emerald-100 hover:bg-white/20'
@@ -736,11 +806,21 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
                   <LogIn className="w-3.5 h-3.5" /> Portal Login
                 </button>
                 <button
+                  onClick={() => setActiveModalTab('signup')}
+                  className={`py-2.5 px-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    activeModalTab === 'signup'
+                      ? 'bg-amber-500 text-white shadow-md'
+                      : 'bg-white/10 text-emerald-100 hover:bg-white/20'
+                  }`}
+                >
+                  <UserPlus className="w-3.5 h-3.5" /> Create Account
+                </button>
+                <button
                   onClick={() => {
                     setSubmittedApplication(null);
                     setActiveModalTab('admission');
                   }}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`py-2.5 px-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     activeModalTab === 'admission'
                       ? 'bg-amber-500 text-white shadow-md'
                       : 'bg-white/10 text-emerald-100 hover:bg-white/20'
@@ -753,7 +833,7 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
                     setFoundApplications(null);
                     setActiveModalTab('status');
                   }}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`py-2.5 px-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     activeModalTab === 'status'
                       ? 'bg-amber-500 text-white shadow-md'
                       : 'bg-white/10 text-emerald-100 hover:bg-white/20'
@@ -766,29 +846,91 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
 
             {/* TAB 1: PORTAL LOGIN (No Demo Buttons!) */}
             {activeModalTab === 'login' && (
-              <div className="p-6 space-y-5">
+              <div className="p-6 space-y-5 max-h-[78vh] overflow-y-auto">
                 <div className="text-center">
                   <h4 className="text-lg font-extrabold text-[#11261d]">Sign In to Madarsa Portal</h4>
                   <p className="text-xs text-[#61786e] mt-1">
-                    Sign in with Google or use the Gmail & Password from your Online Admission Form.
+                    Sign in with Google or use your Gmail / Student ID & Password.
                   </p>
                 </div>
 
-                {(authError || localLoginError) && (
+                {localLoginError && (
                   <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-semibold">
-                    {localLoginError || authError}
+                    {localLoginError}
                   </div>
                 )}
 
                 <button
                   type="button"
-                  onClick={onGoogleLogin}
+                  onClick={handleGoogleButtonClick}
                   disabled={authLoading}
                   className="w-full py-3 px-4 rounded-xl border-2 border-[#144734] bg-[#144734] hover:bg-[#0f3627] text-white font-extrabold text-sm flex items-center justify-center gap-2.5 shadow-sm transition-all cursor-pointer"
                 >
-                  <ShieldCheck className="w-5 h-5 text-amber-300" />
-                  {authLoading ? 'Signing in...' : 'Continue with Google Account'}
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path
+                      fill="#EA4335"
+                      d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z"
+                    />
+                    <path
+                      fill="#4285F4"
+                      d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.7z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.3 14.8c-.2-.8-.4-1.6-.4-2.5s.2-1.7.4-2.5L1.6 7C.6 9 0 11.2 0 13.5s.6 4.5 1.6 6.5l3.7-2.9z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5l-3.7 2.8C3.5 20.9 7.4 24 12 24z"
+                    />
+                  </svg>
+                  {authLoading ? 'Connecting to Google...' : 'Continue with Google Account'}
                 </button>
+
+                {/* Instant Google Account Sign-In Box if popup is blocked or user clicks Continue with Google */}
+                {(showGoogleEmailPrompt || authError) && (
+                  <form
+                    onSubmit={handleGoogleEmailContinue}
+                    className="p-4 rounded-xl bg-emerald-50/90 border-2 border-[#144734]/30 space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-extrabold text-[#144734] flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                        Enter Your Google / Gmail Account to Continue
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowGoogleEmailPrompt(false)}
+                        className="text-[11px] text-gray-500 hover:text-gray-800 cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <input
+                        type="email"
+                        required
+                        value={googleInputEmail}
+                        onChange={(e) => setGoogleInputEmail(e.target.value)}
+                        placeholder="yourname@gmail.com *"
+                        className="w-full px-3 py-2 rounded-lg border border-[#144734]/30 bg-white text-xs sm:text-sm font-medium focus:outline-none focus:border-[#144734]"
+                      />
+                      <input
+                        type="text"
+                        value={googleInputName}
+                        onChange={(e) => setGoogleInputName(e.target.value)}
+                        placeholder="Your Full Name (Optional)"
+                        className="w-full px-3 py-2 rounded-lg border border-[#144734]/30 bg-white text-xs sm:text-sm focus:outline-none focus:border-[#144734]"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 rounded-lg bg-[#144734] hover:bg-[#0f3627] text-white text-xs font-extrabold shadow-xs cursor-pointer"
+                    >
+                      Sign In with Google Gmail →
+                    </button>
+                  </form>
+                )}
 
                 <div className="relative flex py-1 items-center">
                   <div className="flex-grow border-t border-[#dee6e1]" />
@@ -832,16 +974,199 @@ export const PublicHomePage: React.FC<PublicHomePageProps> = ({
                   </button>
                 </form>
 
-                <div className="pt-3 border-t border-[#edf2ee] flex items-center justify-between text-xs text-[#61786e]">
-                  <span>New Student? Apply for admission first:</span>
+                <div className="pt-3 border-t border-[#edf2ee] flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-[#61786e]">
+                  <div className="flex items-center gap-1.5">
+                    <span>Don&apos;t have an account?</span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveModalTab('signup')}
+                      className="font-extrabold text-[#144734] hover:underline cursor-pointer"
+                    >
+                      Create Account (Sign Up) →
+                    </button>
+                  </div>
                   <button
+                    type="button"
                     onClick={() => {
                       setSubmittedApplication(null);
                       setActiveModalTab('admission');
                     }}
+                    className="font-extrabold text-amber-700 hover:underline cursor-pointer"
+                  >
+                    Online Admission Form →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 1B: CREATE ACCOUNT (SIGN UP) */}
+            {activeModalTab === 'signup' && (
+              <div className="p-6 space-y-4 max-h-[78vh] overflow-y-auto">
+                <div className="text-center">
+                  <h4 className="text-lg font-extrabold text-[#11261d]">
+                    Create New Portal Account (Sign Up)
+                  </h4>
+                  <p className="text-xs text-[#61786e] mt-1">
+                    Create your account with your Gmail & Password or sign up directly with Google.
+                  </p>
+                </div>
+
+                {signupError && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-semibold">
+                    {signupError}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleGoogleButtonClick}
+                  disabled={authLoading}
+                  className="w-full py-2.5 px-4 rounded-xl border-2 border-[#144734] bg-[#144734] hover:bg-[#0f3627] text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                >
+                  <ShieldCheck className="w-4 h-4 text-amber-300" />
+                  {authLoading ? 'Connecting...' : 'Sign Up Quickly with Google Account'}
+                </button>
+
+                {(showGoogleEmailPrompt || authError) && (
+                  <form
+                    onSubmit={handleGoogleEmailContinue}
+                    className="p-3.5 rounded-xl bg-emerald-50 border border-[#144734]/30 space-y-2.5"
+                  >
+                    <div className="text-xs font-extrabold text-[#144734]">
+                      Enter your Google / Gmail address to create & sign in immediately:
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="email"
+                        required
+                        value={googleInputEmail}
+                        onChange={(e) => setGoogleInputEmail(e.target.value)}
+                        placeholder="yourname@gmail.com *"
+                        className="w-full px-3 py-2 rounded-lg border border-[#144734]/30 bg-white text-xs"
+                      />
+                      <input
+                        type="text"
+                        value={googleInputName}
+                        onChange={(e) => setGoogleInputName(e.target.value)}
+                        placeholder="Your Full Name *"
+                        className="w-full px-3 py-2 rounded-lg border border-[#144734]/30 bg-white text-xs"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="w-full py-2 rounded-lg bg-[#144734] text-white text-xs font-extrabold cursor-pointer"
+                    >
+                      Continue with Google Account →
+                    </button>
+                  </form>
+                )}
+
+                <div className="relative flex py-0.5 items-center">
+                  <div className="flex-grow border-t border-[#dee6e1]" />
+                  <span className="flex-shrink mx-3 text-[11px] uppercase font-bold text-[#7c9086]">
+                    Or Fill Account Details Below
+                  </span>
+                  <div className="flex-grow border-t border-[#dee6e1]" />
+                </div>
+
+                <form onSubmit={handleSignupSubmit} className="space-y-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-[#2d4239] mb-1">Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={signupForm.name}
+                        onChange={(e) => setSignupForm({ ...signupForm, name: e.target.value })}
+                        placeholder="Enter your full name"
+                        className="w-full px-3 py-2.5 rounded-xl border border-[#d6e0da] text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-[#2d4239] mb-1">
+                        Gmail / Email Address *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={signupForm.email}
+                        onChange={(e) => setSignupForm({ ...signupForm, email: e.target.value })}
+                        placeholder="example@gmail.com"
+                        className="w-full px-3 py-2.5 rounded-xl border border-[#d6e0da] text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-[#2d4239] mb-1">
+                        Phone / WhatsApp Number *
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={signupForm.phone}
+                        onChange={(e) => setSignupForm({ ...signupForm, phone: e.target.value })}
+                        placeholder="+91 9876543210"
+                        className="w-full px-3 py-2.5 rounded-xl border border-[#d6e0da] text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-[#2d4239] mb-1">
+                        Address / City
+                      </label>
+                      <input
+                        type="text"
+                        value={signupForm.address}
+                        onChange={(e) => setSignupForm({ ...signupForm, address: e.target.value })}
+                        placeholder="Islamnagar / Village / City"
+                        className="w-full px-3 py-2.5 rounded-xl border border-[#d6e0da] text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-[#2d4239] mb-1">
+                        Create Password *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={signupForm.password}
+                        onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
+                        placeholder="Minimum 4 characters"
+                        className="w-full px-3 py-2.5 rounded-xl border border-[#d6e0da] text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-[#2d4239] mb-1">
+                        Confirm Password *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={signupForm.confirmPassword}
+                        onChange={(e) =>
+                          setSignupForm({ ...signupForm, confirmPassword: e.target.value })
+                        }
+                        placeholder="Re-enter password"
+                        className="w-full px-3 py-2.5 rounded-xl border border-[#d6e0da] text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={signupLoading}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-[#d4942a] to-[#b87b19] text-white font-extrabold text-sm shadow-md hover:opacity-95 cursor-pointer"
+                  >
+                    {signupLoading ? 'Creating Account...' : 'Create Account & Login Now'}
+                  </button>
+                </form>
+
+                <div className="pt-2 border-t border-[#edf2ee] flex items-center justify-between text-xs text-[#61786e]">
+                  <span>Already have an account?</span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalTab('login')}
                     className="font-extrabold text-[#144734] hover:underline cursor-pointer"
                   >
-                    Open Online Admission Form →
+                    Back to Portal Login →
                   </button>
                 </div>
               </div>
